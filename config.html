@@ -1,0 +1,1760 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="lib/tableau.extensions.1.latest.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <title>Pivot Table Configuration</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            margin: 20px;
+        }
+        #config-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border: 1px solid #808080;
+            margin-bottom: 20px;
+        }
+        .config-section {
+            margin-bottom: 20px;
+            border: 1px solid #808080;
+            padding: 15px;
+            border-radius: 8px;
+            background: #fff;
+        }
+        .columns-select {
+            width: 100%;
+            height: 120px;
+            margin: 10px 0;
+            border: 1px solid #808080;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 8px 16px;
+            border: 1px solid #808080;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .sortable-list {
+            min-height: 40px;
+            border: 1px solid #808080;
+            padding: 10px;
+            margin: 10px 0;
+            background: #fff;
+        }
+        .sortable-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            margin: 4px 0;
+            background: #f8f9fa;
+            border: 1px solid #808080;
+            cursor: move;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+            background: white;
+            border: 2px solid #808080;
+        }
+        th, td {
+            border: 1px solid #808080;
+            padding: 10px;
+            vertical-align: middle;
+        }
+        .group-header {
+            background: #f1f3f5;
+        }
+        .table-title {
+            vertical-align: middle !important;
+        }
+        .header-rows-control {
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .format-settings {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+            z-index: 1000;
+            border: 2px solid #808080;
+        }
+        .format-tabs {
+            display: flex;
+            margin-bottom: 15px;
+        }
+        .format-tab {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+        .format-tab.active {
+            border-color: #4CAF50;
+        }
+        .format-content {
+            display: none;
+        }
+        .format-content.active {
+            display: block;
+        }
+        .color-picker, .alignment-control {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+            gap: 10px;
+        }
+        .condition-row {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+        }
+        .condition-row select {
+            width: auto;
+            margin: 0 10px;
+            border: 1px solid #808080;
+        }
+        .title-section {
+            margin-bottom: 20px;
+        }
+        .title-section input, .title-section select {
+            width: 300px;
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #808080;
+        }
+        .save-config {
+            background: #2196F3 !important;
+        }
+        .save-config:hover {
+            background: #1976D2 !important;
+        }
+        .title-color-controls {
+            margin-top: 10px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .title-color-picker {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .remove-btn {
+            background: #ff4444 !important;
+            margin-left: 5px;
+            padding: 2px 8px !important;
+        }
+        .remove-btn:hover {
+            background: #cc0000 !important;
+        }
+        .grand-total {
+            background-color: #e9ecef !important;
+            font-weight: bold;
+        }
+        .rename-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+            z-index: 1000;
+            width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 2px solid #808080;
+        }
+        .rename-field {
+            display: flex;
+            align-items: center;
+            margin: 10px 0;
+        }
+        .rename-field label {
+            width: 120px;
+            margin-right: 10px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .rename-field input {
+            flex: 1;
+            padding: 6px;
+        }
+        select {
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid #808080;
+        }
+        .subtotal-row {
+            background-color: #f8f9fa !important;
+            border-top: 2px solid #dee2e6 !important;
+        }
+        .subtotal-row td {
+            font-weight: 600 !important;
+        }
+        .subtotal {
+            background-color: #e9ecef !important;
+        }
+        .subtotal-row td.grand-total {
+            background-color: inherit !important;
+            font-weight: bold !important;
+        }
+        input[type="color"] {
+            width: 30px;
+            height: 30px;
+            padding: 2px;
+            border: 1px solid #808080;
+            border-radius: 4px;
+            cursor: pointer;
+            background: none;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+        input[type="color"]::-webkit-color-swatch {
+            border: none;
+            border-radius: 2px;
+        }
+        .title-control {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .title-control label {
+            width: 120px;
+        }
+        .title-control input[type="text"] {
+            flex: 1;
+            padding: 6px;
+            border: 1px solid #808080;
+            border-radius: 4px;
+        }
+        .title-control select {
+            width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div id="config-panel">
+        <div class="config-section">
+            <h3>Workbook Settings</h3>
+            <div class="title-control">
+                <label>Excel File Name:</label>
+                <input type="text" id="workbook-file-name" placeholder="Enter file name" value="pivot_data">
+                <span>OR</span>
+                <select id="excel-file-name-field">
+                    <option value="">None</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h3>Sheet Settings</h3>
+            <div class="title-control">
+                <label>Sheet Name:</label>
+                <input type="text" id="sheet-name" placeholder="Enter sheet name">
+                <span>OR</span>
+                <select id="sheet-name-field">
+                    <option value="">Select field for sheet name</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h3>Header Rows</h3>
+            <div class="header-rows-control">
+                <label>Number of Header Rows:</label>
+                <input type="number" id="header-rows-count" min="0" value="0" style="width: 60px;">
+                <button onclick="applyHeaderRows()">Apply</button>
+            </div>
+        </div>
+
+        <div class="config-section title-section">
+            <h3>Table Title</h3>
+            <input type="text" id="table-title" placeholder="Enter custom title">
+            <span>OR</span>
+            <select id="title-column">
+                <option value="">Select column for title</option>
+            </select>
+            <div class="title-color-controls">
+                <div class="alignment-control">
+                    <label>Title Alignment:</label>
+                    <select id="title-alignment">
+                        <option value="left">Left</option>
+                        <option value="center">Center</option>
+                        <option value="right">Right</option>
+                    </select>
+                </div>
+                <div class="title-color-picker">
+                    <label>Title Color:</label>
+                    <input type="color" id="title-font-color" value="#000000">
+                </div>
+                <div class="title-color-picker">
+                    <label>Title Background:</label>
+                    <input type="color" id="title-bg-color" value="#F8F9FA">
+                </div>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h3>Available Columns</h3>
+            <select id="available-columns" class="columns-select" multiple></select>
+            <div class="button-group">
+                <button onclick="addToSection('group')">Add to Rows</button>
+                <button onclick="addToSection('pivot')">Add to Columns</button>
+                <button onclick="addToSection('value')">Add to Values</button>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h3>Subtotal Levels</h3>
+            <select id="subtotal-level-select" multiple style="width: 100%; height: 80px;">
+                <option value="0">Group Level 1</option>
+                <option value="1">Group Level 2</option>
+                <option value="2">Group Level 3</option>
+            </select>
+            <p>Select one or more group levels to show subtotals.</p>
+        </div>
+
+        <div class="config-section">
+            <h3>Totals</h3>
+            <label><input type="checkbox" id="show-subtotals"> Row Subtotals</label>
+            <label><input type="checkbox" id="show-row-totals"> Row Grand Totals</label>
+            <label><input type="checkbox" id="show-column-totals"> Column Grand Totals</label>
+        </div>
+
+        <div class="config-section">
+            <h3>Row Groups</h3>
+            <div id="group-columns" class="sortable-list"></div>
+        </div>
+
+        <div class="config-section">
+            <h3>Column Groups</h3>
+            <div id="pivot-columns" class="sortable-list"></div>
+        </div>
+
+        <div class="config-section">
+            <h3>Values</h3>
+            <div id="value-columns" class="sortable-list"></div>
+        </div>
+
+        <div class="button-group">
+            <button onclick="showRenameModal()">Rename Fields</button>
+            <button onclick="showHeaderFormatModal()">Format Headers</button>
+            <button id="generate-btn">Generate Pivot Table</button>
+            <button id="save-btn" class="save-config">Save Configuration</button>
+        </div>
+    </div>
+    <div id="data-container"></div>
+
+    <div id="format-settings" class="format-settings">
+        <div class="format-tabs">
+            <div class="format-tab active" onclick="showFormatTab('basic')">Basic</div>
+            <div class="format-tab" onclick="showFormatTab('conditional')">Conditional</div>
+            <div style="flex:1"></div>
+            <button onclick="closeFormatSettings()">×</button>
+        </div>
+        
+        <div id="basic-format" class="format-content active">
+            <div class="color-picker" id="number-format-container">
+                <label>Number Format:</label>
+                <select id="format-type">
+                    <option value="text">Text</option>
+                    <option value="number">Number</option>
+                    <option value="currency">Currency</option>
+                    <option value="percentage">Percentage</option>
+                </select>
+            </div>
+            
+            <div class="color-picker" id="currency-symbol-container" style="display: none;">
+                <label>Currency Symbol:</label>
+                <input type="text" id="currency-symbol" class="currency-symbol-input" value="$" maxlength="3">
+            </div>
+            <div class="color-picker" id="decimals-container">
+                <label>Decimal Places:</label>
+                <input type="number" id="decimals" min="0" max="4" value="2">
+            </div>
+            <div class="color-picker">
+                <label>Font Color:</label>
+                <input type="color" id="font-color" value="#000000">
+            </div>
+            <div class="color-picker">
+                <label>Background Color:</label>
+                <input type="color" id="bg-color" value="#FFFFFF">
+            </div>
+        </div>
+
+        <div id="conditional-format" class="format-content">
+            <div id="conditions-container"></div>
+            <button onclick="addNewCondition()">+ Add Condition</button>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <button onclick="saveFormatSettings()">Save</button>
+            <button onclick="closeFormatSettings()">Cancel</button>
+        </div>
+    </div>
+
+    <div id="rename-modal" class="rename-modal">
+        <h3>Rename Fields</h3>
+        <div id="rename-fields-list"></div>
+        <div style="margin-top: 20px;">
+            <button onclick="saveRenames()">Save Changes</button>
+            <button onclick="closeRenameModal()">Cancel</button>
+        </div>
+    </div>
+
+    <div id="header-format-modal" class="format-settings">
+        <div class="format-tabs">
+            <div class="format-tab active" onclick="showHeaderFormatTab('row-groups')">Row Groups</div>
+            <div class="format-tab" onclick="showHeaderFormatTab('column-groups')">Column Groups</div>
+            <div class="format-tab" onclick="showHeaderFormatTab('totals')">Totals</div>
+            <div class="format-tab" onclick="showHeaderFormatTab('subtotals')">Subtotals</div>
+            <div style="flex:1"></div>
+            <button onclick="closeHeaderFormatModal()">×</button>
+        </div>
+
+        <div id="subtotals-format" class="format-content">
+            <div class="color-picker">
+                <label>Font Color:</label>
+                <input type="color" id="subtotals-font-color" value="#000000">
+            </div>
+            <div class="color-picker">
+                <label>Background Color:</label>
+                <input type="color" id="subtotals-bg-color" value="#F8F9FA">
+            </div>
+            <div class="alignment-control">
+                <label>Text Alignment:</label>
+                <select id="subtotals-alignment">
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                </select>
+            </div>
+        </div>
+        
+        <div id="row-groups-format" class="format-content active">
+            <div class="color-picker">
+                <label>Font Color:</label>
+                <input type="color" id="row-group-font-color" value="#000000">
+            </div>
+            <div class="color-picker">
+                <label>Background Color:</label>
+                <input type="color" id="row-group-bg-color" value="#F1F3F5">
+            </div>
+            <div class="alignment-control">
+                <label>Text Alignment:</label>
+                <select id="row-group-alignment">
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="column-groups-format" class="format-content">
+            <div class="color-picker">
+                <label>Font Color:</label>
+                <input type="color" id="column-group-font-color" value="#000000">
+            </div>
+            <div class="color-picker">
+                <label>Background Color:</label>
+                <input type="color" id="column-group-bg-color" value="#E9ECEF">
+            </div>
+            <div class="alignment-control">
+                <label>Text Alignment:</label>
+                <select id="column-group-alignment">
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="totals-format" class="format-content">
+            <div class="color-picker">
+                <label>Font Color:</label>
+                <input type="color" id="totals-font-color" value="#000000">
+            </div>
+            <div class="color-picker">
+                <label>Background Color:</label>
+                <input type="color" id="totals-bg-color" value="#E9ECEF">
+            </div>
+            <div class="alignment-control">
+                <label>Text Alignment:</label>
+                <select id="totals-alignment">
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                </select>
+            </div>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <button onclick="saveHeaderFormatSettings()">Save</button>
+            <button onclick="closeHeaderFormatModal()">Cancel</button>
+        </div>
+    </div>
+
+    <div id="header-row-modal" class="format-settings">
+        <h3>Header Row Configuration</h3>
+        <div class="header-row-config">
+            <input type="hidden" id="current-header-row-index" value="-1">
+            <div>
+                <label>Header Content Type:</label>
+                <select id="header-row-type" onchange="updateHeaderRowInputs()">
+                    <option value="text">Custom Text</option>
+                    <option value="column">Column Value</option>
+                    <option value="filters">Filter Values</option>
+                </select>
+            </div>
+            <div id="text-input-container">
+                <label>Header Text:</label>
+                <input type="text" id="header-row-text" placeholder="Enter header text">
+            </div>
+            <div id="column-select-container">
+                <label>Select Column:</label>
+                <select id="header-row-column">
+                    <option value="">Select column for header</option>
+                </select>
+            </div>
+            <div class="title-color-controls">
+                <div class="alignment-control">
+                    <label>Text Alignment:</label>
+                    <select id="header-row-alignment">
+                        <option value="left">Left</option>
+                        <option value="center">Center</option>
+                        <option value="right">Right</option>
+                    </select>
+                </div>
+                <div class="title-color-picker">
+                    <label>Font Color:</label>
+                    <input type="color" id="header-row-font-color" value="#000000">
+                </div>
+                <div class="title-color-picker">
+                    <label>Background Color:</label>
+                    <input type="color" id="header-row-bg-color" value="#F8F9FA">
+                </div>
+            </div>
+            <div style="margin-top: 20px;">
+                <button onclick="saveHeaderRowConfig()">Save</button>
+                <button onclick="closeHeaderRowModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let allData = [];
+    let columns = [];
+    let sortables = {};
+    let currentFormattingColumn = null;
+    let formatSettings = {};
+    let titleColumnMap = {};
+    let tableTitle = '';
+    let titleFontColor = '000000';
+    let titleBgColor = 'F8F9FA';
+    let titleAlignment = 'center';
+    let fieldRenames = {};
+    let headerRowsCount = 0;
+    let headerRowSettings = [];
+    let headerFormatSettings = {
+        rowGroups: { fontColor: '000000', bgColor: 'F1F3F5', textAlign: 'left' },
+        columnGroups: { fontColor: '000000', bgColor: 'E9ECEF', textAlign: 'center' },
+        totals: { fontColor: '000000', bgColor: 'E9ECEF', textAlign: 'right' },
+        subtotals: { fontColor: '000000', bgColor: 'F8F9FA', textAlign: 'left' }
+    };
+
+    async function fetchWorksheetData() {
+        const worksheetName = "Download";
+        const worksheet = tableau.extensions.dashboardContent.dashboard.worksheets.find(ws => ws.name === worksheetName);
+        if (!worksheet) {
+            console.error(`Worksheet "${worksheetName}" not found`);
+            return;
+        }
+        let dataTableReader = await worksheet.getSummaryDataReaderAsync();
+        const columnsInfo = await worksheet.getSummaryColumnsInfoAsync();
+        const firstPage = await dataTableReader.getPageAsync(0);
+        const sortedColumns = firstPage.columns;
+        const indexMap = columnsInfo.map(viewCol => 
+            sortedColumns.findIndex(sortedCol => sortedCol.fieldId === viewCol.fieldId)
+        );
+
+        columns = columnsInfo.map(col => ({
+            id: col.fieldName,
+            name: col.fieldName.replace(/^\[.*?\]\.?/g, '')
+                            .replace(/(SUM|AVG|COUNT)\(/gi, '')
+                            .replace(/[^a-zA-Z0-9 ]/g, ' ')
+                            .trim()
+        }));
+
+        allData = [];
+        for (let page = 0; page < dataTableReader.pageCount; page++) {
+            const dataTablePage = await dataTableReader.getPageAsync(page);
+            for (let rowIndex = 0; rowIndex < dataTablePage.totalRowCount; rowIndex++) {
+                const row = dataTablePage.data[rowIndex];
+                const obj = {};
+                columnsInfo.forEach((col, colIndex) => {
+                    const sourceIndex = indexMap[colIndex];
+                    obj[col.fieldName] = row[sourceIndex]?.value ?? null;
+                });
+                allData.push(obj);
+            }
+        }
+
+        titleColumnMap = {};
+        allData.forEach(r => {
+            columns.forEach(c => {
+                if (!titleColumnMap[c.id] && r[c.id]) 
+                    titleColumnMap[c.id] = r[c.id];
+            });
+        });
+
+        await dataTableReader.releaseAsync();
+
+        populateAvailableColumns();
+        updateSelects();
+    }
+
+    function populateAvailableColumns() {
+        const availableColumns = document.getElementById('available-columns');
+        availableColumns.innerHTML = '';
+        columns.forEach(col => {
+            const option = document.createElement('option');
+            option.value = col.id;
+            option.textContent = col.name;
+            availableColumns.appendChild(option);
+        });
+    }
+
+    function updateSelects() {
+        const selects = ['title-column', 'sheet-name-field', 'header-row-column', 'excel-file-name-field'];
+        selects.forEach(selId => {
+            const select = document.getElementById(selId);
+            select.innerHTML = `<option value="">${selId === 'excel-file-name-field' ? 'None' : 'Select ' + selId.replace('-', ' ')}</option>`;
+            columns.forEach(col => {
+                const option = document.createElement('option');
+                option.value = col.id;
+                option.textContent = col.name;
+                select.appendChild(option);
+            });
+        });
+    }
+
+    function initSortables() {
+        ['group', 'pivot', 'value'].forEach(type => {
+            if (sortables[type]) sortables[type].destroy();
+            sortables[type] = Sortable.create(document.getElementById(`${type}-columns`), {
+                group: 'shared',
+                animation: 150,
+                onSort: generatePivotTable
+            });
+        });
+    }
+
+    window.addToSection = function(type) {
+        const selected = Array.from(document.getElementById('available-columns').selectedOptions);
+        const targetList = document.getElementById(`${type}-columns`);
+
+        selected.forEach(option => {
+            if (!targetList.querySelector(`[data-id="${option.value}"]`)) {
+                const item = document.createElement('div');
+                item.className = 'sortable-item';
+                item.dataset.id = option.value;
+                item.innerHTML = `
+                    <span>${option.textContent}</span>
+                    <button class="format-btn" onclick="openFormatSettings('${option.value}')">⚙️</button>
+                    <button class="remove-btn" onclick="removeFromSection('${type}', '${option.value}')">×</button>
+                `;
+                targetList.appendChild(item);
+            }
+        });
+        generatePivotTable();
+    };
+
+    function removeFromSection(sectionType, columnId) {
+        const section = document.getElementById(`${sectionType}-columns`);
+        const item = section.querySelector(`[data-id="${columnId}"]`);
+        if (item) item.remove();
+        generatePivotTable();
+    }
+
+    function getConfig(type) {
+        return Array.from(document.getElementById(`${type}-columns`).children).map(item => ({
+            id: item.dataset.id,
+            name: fieldRenames[item.dataset.id] || item.querySelector('span').textContent
+        }));
+    }
+
+    async function saveConfiguration() {
+        const config = {
+            version: 8,
+            groupColumns: getConfig('group'),
+            pivotColumns: getConfig('pivot'),
+            valueColumns: getConfig('value'),
+            showSubtotals: document.getElementById('show-subtotals').checked,
+            showRowTotals: document.getElementById('show-row-totals').checked,
+            showColumnTotals: document.getElementById('show-column-totals').checked,
+            selectedSubtotalLevels: Array.from(document.getElementById('subtotal-level-select').selectedOptions)
+                .map(opt => opt.value),
+            tableTitle: document.getElementById('table-title').value,
+            titleFontColor: document.getElementById('title-font-color').value.replace('#', ''),
+            titleBgColor: document.getElementById('title-bg-color').value.replace('#', ''),
+            titleAlignment: document.getElementById('title-alignment').value,
+            formatSettings: formatSettings,
+            fieldRenames: fieldRenames,
+            headerRowsCount: headerRowsCount,
+            headerRowSettings: headerRowSettings,
+            headerFormatSettings: headerFormatSettings,
+            sheetName: document.getElementById('sheet-name').value,
+            sheetNameField: document.getElementById('sheet-name-field').value,
+            excelFileName: document.getElementById('workbook-file-name').value,
+            excelFileNameField: document.getElementById('excel-file-name-field').value
+        };
+
+        try {
+            await tableau.extensions.settings.set('config', JSON.stringify(config));
+            await tableau.extensions.settings.saveAsync();
+            console.log('Configuration saved');
+            tableau.extensions.ui.closeDialog('Configuration Saved');
+        } catch (error) {
+            console.error('Error saving configuration:', error);
+            alert('Failed to save configuration: ' + error.message);
+        }
+    }
+
+    async function loadConfiguration() {
+        const savedConfig = tableau.extensions.settings.get('config');
+        if (!savedConfig) return;
+
+        const config = JSON.parse(savedConfig);
+        if (config.version !== 8) return;
+
+        formatSettings = config.formatSettings || {};
+        fieldRenames = config.fieldRenames || {};
+        headerFormatSettings = config.headerFormatSettings || headerFormatSettings;
+        headerRowsCount = config.headerRowsCount || 0;
+        headerRowSettings = config.headerRowSettings || [];
+        tableTitle = config.tableTitle || '';
+        titleFontColor = config.titleFontColor || '000000';
+        titleBgColor = config.titleBgColor || 'F8F9FA';
+        titleAlignment = config.titleAlignment || 'center';
+
+        document.getElementById('workbook-file-name').value = config.excelFileName || 'pivot_data';
+        document.getElementById('excel-file-name-field').value = config.excelFileNameField || '';
+        document.getElementById('sheet-name').value = config.sheetName || '';
+        document.getElementById('sheet-name-field').value = config.sheetNameField || '';
+        document.getElementById('table-title').value = config.tableTitle || '';
+        document.getElementById('title-font-color').value = `#${config.titleFontColor || '000000'}`;
+        document.getElementById('title-bg-color').value = `#${config.titleBgColor || 'F8F9FA'}`;
+        document.getElementById('title-alignment').value = config.titleAlignment || 'center';
+        document.getElementById('header-rows-count').value = headerRowsCount;
+
+        ['group', 'pivot', 'value'].forEach(type => {
+            const section = document.getElementById(`${type}-columns`);
+            section.innerHTML = '';
+            (config[`${type}Columns`] || []).forEach(col => {
+                const item = document.createElement('div');
+                item.className = 'sortable-item';
+                item.dataset.id = col.id;
+                item.innerHTML = `
+                    <span>${col.name}</span>
+                    <button class="format-btn" onclick="openFormatSettings('${col.id}')">⚙️</button>
+                    <button class="remove-btn" onclick="removeFromSection('${type}', '${col.id}')">×</button>
+                `;
+                section.appendChild(item);
+            });
+        });
+
+        document.getElementById('show-subtotals').checked = config.showSubtotals || false;
+        document.getElementById('show-row-totals').checked = config.showRowTotals || false;
+        document.getElementById('show-column-totals').checked = config.showColumnTotals || false;
+
+        const subtotalSelect = document.getElementById('subtotal-level-select');
+        Array.from(subtotalSelect.options).forEach(opt => {
+            opt.selected = (config.selectedSubtotalLevels || []).includes(opt.value);
+        });
+
+        initSortables();
+    }
+
+    function showRenameModal() {
+        const modal = document.getElementById('rename-modal');
+        const list = document.getElementById('rename-fields-list');
+        list.innerHTML = '';
+
+        const allFields = [...getConfig('group'), ...getConfig('pivot'), ...getConfig('value')];
+        allFields.forEach(field => {
+            const div = document.createElement('div');
+            div.className = 'rename-field';
+            div.innerHTML = `
+                <label title="${field.id}">${field.id}</label>
+                <input type="text" value="${fieldRenames[field.id] || field.name}">
+            `;
+            list.appendChild(div);
+        });
+
+        modal.style.display = 'block';
+    }
+
+    function updateHeaderRowInputs() {
+        const type = document.getElementById('header-row-type').value;
+        document.getElementById('text-input-container').style.display = type === 'text' ? 'block' : 'none';
+        document.getElementById('column-select-container').style.display = type === 'column' ? 'block' : 'none';
+    }
+
+    function closeRenameModal() {
+        document.getElementById('rename-modal').style.display = 'none';
+    }
+
+    function saveRenames() {
+        const inputs = document.querySelectorAll('#rename-fields-list .rename-field input');
+        inputs.forEach(input => {
+            const originalName = input.previousElementSibling.textContent;
+            const newName = input.value.trim();
+            fieldRenames[originalName] = newName || originalName;
+        });
+        closeRenameModal();
+        generatePivotTable();
+    }
+
+    function showHeaderFormatModal() {
+        document.getElementById('header-format-modal').style.display = 'block';
+        loadHeaderFormatSettings();
+    }
+
+    function closeHeaderFormatModal() {
+        document.getElementById('header-format-modal').style.display = 'none';
+    }
+
+    function showHeaderFormatTab(tabName) {
+        document.querySelectorAll('#header-format-modal .format-tab, #header-format-modal .format-content')
+            .forEach(el => el.classList.remove('active'));
+        document.getElementById(`${tabName}-format`).classList.add('active');
+        document.querySelector(`[onclick="showHeaderFormatTab('${tabName}')"]`).classList.add('active');
+    }
+
+    function loadHeaderFormatSettings() {
+        document.getElementById('row-group-font-color').value = `#${headerFormatSettings.rowGroups.fontColor}`;
+        document.getElementById('row-group-bg-color').value = `#${headerFormatSettings.rowGroups.bgColor}`;
+        document.getElementById('row-group-alignment').value = headerFormatSettings.rowGroups.textAlign;
+
+        document.getElementById('column-group-font-color').value = `#${headerFormatSettings.columnGroups.fontColor}`;
+        document.getElementById('column-group-bg-color').value = `#${headerFormatSettings.columnGroups.bgColor}`;
+        document.getElementById('column-group-alignment').value = headerFormatSettings.columnGroups.textAlign;
+
+        document.getElementById('totals-font-color').value = `#${headerFormatSettings.totals.fontColor}`;
+        document.getElementById('totals-bg-color').value = `#${headerFormatSettings.totals.bgColor}`;
+        document.getElementById('totals-alignment').value = headerFormatSettings.totals.textAlign;
+
+        document.getElementById('subtotals-font-color').value = `#${headerFormatSettings.subtotals.fontColor}`;
+        document.getElementById('subtotals-bg-color').value = `#${headerFormatSettings.subtotals.bgColor}`;
+        document.getElementById('subtotals-alignment').value = headerFormatSettings.subtotals.textAlign;
+    }
+
+    function saveHeaderFormatSettings() {
+        headerFormatSettings = {
+            rowGroups: {
+                fontColor: document.getElementById('row-group-font-color').value.replace('#', ''),
+                bgColor: document.getElementById('row-group-bg-color').value.replace('#', ''),
+                textAlign: document.getElementById('row-group-alignment').value
+            },
+            columnGroups: {
+                fontColor: document.getElementById('column-group-font-color').value.replace('#', ''),
+                bgColor: document.getElementById('column-group-bg-color').value.replace('#', ''),
+                textAlign: document.getElementById('column-group-alignment').value
+            },
+            totals: {
+                fontColor: document.getElementById('totals-font-color').value.replace('#', ''),
+                bgColor: document.getElementById('totals-bg-color').value.replace('#', ''),
+                textAlign: document.getElementById('totals-alignment').value
+            },
+            subtotals: {
+                fontColor: document.getElementById('subtotals-font-color').value.replace('#', ''),
+                bgColor: document.getElementById('subtotals-bg-color').value.replace('#', ''),
+                textAlign: document.getElementById('subtotals-alignment').value
+            }
+        };
+        generatePivotTable();
+        closeHeaderFormatModal();
+    }
+
+    function applyHeaderStyles(element, headerType) {
+        const settings = headerFormatSettings[headerType] || {};
+        element.style.color = `#${settings.fontColor || '000000'}`;
+        element.style.backgroundColor = `#${settings.bgColor || 'FFFFFF'}`;
+        element.style.textAlign = settings.textAlign || 'left';
+        element.style.border = '1px solid #808080';
+    }
+
+    function openFormatSettings(columnId) {
+        currentFormattingColumn = columnId;
+        formatSettings[columnId] = formatSettings[columnId] || {
+            fontColor: '000000',
+            bgColor: 'FFFFFF',
+            formatType: 'text',
+            currencySymbol: '$',
+            decimals: 2,
+            conditions: []
+        };
+
+        document.getElementById('format-type').value = formatSettings[columnId].formatType;
+        document.getElementById('currency-symbol').value = formatSettings[columnId].currencySymbol;
+        document.getElementById('decimals').value = formatSettings[columnId].decimals;
+        document.getElementById('font-color').value = `#${formatSettings[columnId].fontColor}`;
+        document.getElementById('bg-color').value = `#${formatSettings[columnId].bgColor}`;
+        document.getElementById('currency-symbol-container').style.display = 
+            formatSettings[columnId].formatType === 'currency' ? 'flex' : 'none';
+        document.getElementById('decimals-container').style.display = 
+            ['number', 'currency', 'percentage'].includes(formatSettings[columnId].formatType) ? 'flex' : 'none';
+        loadConditions(formatSettings[columnId].conditions);
+        document.getElementById('format-settings').style.display = 'block';
+    }
+
+    function closeFormatSettings() {
+        document.getElementById('format-settings').style.display = 'none';
+        currentFormattingColumn = null;
+    }
+
+    function showFormatTab(tabName) {
+        document.querySelectorAll('.format-tab, .format-content').forEach(el => el.classList.remove('active'));
+        document.getElementById(`${tabName}-format`).classList.add('active');
+        document.querySelector(`[onclick="showFormatTab('${tabName}')"]`).classList.add('active');
+    }
+
+    function addNewCondition() {
+        const container = document.getElementById('conditions-container');
+        const div = document.createElement('div');
+        div.className = 'condition-row';
+
+        const fieldOptions = columns.map(col => 
+            `<option value="${col.id}">${col.name}</option>`
+        ).join('');
+
+        div.innerHTML = `
+            <select class="condition-operator">
+                <option value="==">Equal To</option>
+                <option value=">">Greater Than</option>
+                <option value="<">Less Than</option>
+            </select>
+            <select class="condition-compare-type">
+                <option value="value">Value</option>
+                <option value="field">Field</option>
+            </select>
+            <input type="text" class="condition-value" placeholder="Enter value">
+            <select class="condition-field" style="display: none;">
+                <option value="">Select Field</option>
+                ${fieldOptions}
+            </select>
+            <label>Font:</label>
+            <input type="color" class="condition-font" value="#000000">
+            <label>Background:</label>
+            <input type="color" class="condition-bg" value="#FFFFFF">
+            <label>Shape:</label>
+            <input type="text" class="condition-shape" placeholder="🔺 / 💡 / ✔️" maxlength="3">
+            <button onclick="this.parentElement.remove()">×</button>
+        `;
+
+        const compareType = div.querySelector('.condition-compare-type');
+        const valueInput = div.querySelector('.condition-value');
+        const fieldSelect = div.querySelector('.condition-field');
+        compareType.addEventListener('change', () => {
+            valueInput.style.display = compareType.value === 'value' ? 'inline-block' : 'none';
+            fieldSelect.style.display = compareType.value === 'field' ? 'inline-block' : 'none';
+        });
+
+        container.appendChild(div);
+    }
+
+    function loadConditions(conditions) {
+        const container = document.getElementById('conditions-container');
+        container.innerHTML = '';
+        conditions.forEach(cond => {
+            const fieldOptions = columns.map(col => 
+                `<option value="${col.id}" ${cond.compareType === 'field' && cond.value === col.id ? 'selected' : ''}>${col.name}</option>`
+            ).join('');
+
+            const div = document.createElement('div');
+            div.className = 'condition-row';
+            div.innerHTML = `
+                <select class="condition-operator">
+                    <option value="==" ${cond.operator === '==' ? 'selected' : ''}>Equal To</option>
+                    <option value=">" ${cond.operator === '>' ? 'selected' : ''}>Greater Than</option>
+                    <option value="<" ${cond.operator === '<' ? 'selected' : ''}>Less Than</option>
+                </select>
+                <select class="condition-compare-type">
+                    <option value="value" ${cond.compareType === 'value' ? 'selected' : ''}>Value</option>
+                    <option value="field" ${cond.compareType === 'field' ? 'selected' : ''}>Field</option>
+                </select>
+                <input type="text" class="condition-value" value="${cond.compareType === 'value' ? cond.value : ''}" placeholder="Enter value" style="${cond.compareType === 'field' ? 'display: none;' : ''}">
+                <select class="condition-field" style="${cond.compareType === 'value' ? 'display: none;' : ''}">
+                    <option value="">Select Field</option>
+                    ${fieldOptions}
+                </select>
+                <label>Font:</label>
+                <input type="color" class="condition-font" value="#${cond.fontColor}">
+                <label>Background:</label>
+                <input type="color" class="condition-bg" value="#${cond.bgColor}">
+                <label>Shape:</label>
+                <input type="text" class="condition-shape" value="${cond.shape || ''}" placeholder="🔺 / 💡 / ✔️" maxlength="3">
+                <button onclick="this.parentElement.remove()">×</button>
+            `;
+
+            const compareType = div.querySelector('.condition-compare-type');
+            const valueInput = div.querySelector('.condition-value');
+            const fieldSelect = div.querySelector('.condition-field');
+            compareType.addEventListener('change', () => {
+                valueInput.style.display = compareType.value === 'value' ? 'inline-block' : 'none';
+                fieldSelect.style.display = compareType.value === 'field' ? 'inline-block' : 'none';
+            });
+
+            container.appendChild(div);
+        });
+    }
+
+    function applyHeaderRows() {
+        const newCount = parseInt(document.getElementById('header-rows-count').value, 10) || 0;
+        if (newCount < headerRowSettings.length) {
+            headerRowSettings = headerRowSettings.slice(0, newCount);
+        }
+        while (headerRowSettings.length < newCount) {
+            headerRowSettings.push({
+                type: 'text',
+                text: `Header Row ${headerRowSettings.length + 1}`,
+                column: '',
+                fontColor: '000000',
+                bgColor: 'F8F9FA',
+                textAlign: 'left'
+            });
+        }
+        headerRowsCount = newCount;
+        generatePivotTable();
+    }
+
+    function configureHeaderRow(index) {
+        const modal = document.getElementById('header-row-modal');
+        const settings = headerRowSettings[index] || {
+            type: 'text',
+            text: `Header Row ${index + 1}`,
+            column: '',
+            fontColor: '000000',
+            bgColor: 'F8F9FA',
+            textAlign: 'left'
+        };
+
+        document.getElementById('current-header-row-index').value = index;
+        document.getElementById('header-row-type').value = settings.type || 'text';
+        document.getElementById('header-row-text').value = settings.text || '';
+        document.getElementById('header-row-column').value = settings.column || '';
+        document.getElementById('header-row-font-color').value = `#${settings.fontColor}`;
+        document.getElementById('header-row-bg-color').value = `#${settings.bgColor}`;
+        document.getElementById('header-row-alignment').value = settings.textAlign;
+
+        updateHeaderRowInputs();
+        modal.style.display = 'block';
+    }
+
+    function saveHeaderRowConfig() {
+        const index = parseInt(document.getElementById('current-header-row-index').value, 10);
+        if (isNaN(index) || index < 0) return;
+
+        headerRowSettings[index] = {
+            type: document.getElementById('header-row-type').value,
+            text: document.getElementById('header-row-text').value,
+            column: document.getElementById('header-row-column').value,
+            fontColor: document.getElementById('header-row-font-color').value.replace('#', ''),
+            bgColor: document.getElementById('header-row-bg-color').value.replace('#', ''),
+            textAlign: document.getElementById('header-row-alignment').value
+        };
+
+        closeHeaderRowModal();
+        generatePivotTable();
+    }
+
+    function closeHeaderRowModal() {
+        document.getElementById('header-row-modal').style.display = 'none';
+    }
+
+    function saveFormatSettings() {
+        if (!currentFormattingColumn) return;
+
+        formatSettings[currentFormattingColumn] = {
+            fontColor: document.getElementById('font-color').value.replace('#', ''),
+            bgColor: document.getElementById('bg-color').value.replace('#', ''),
+            formatType: document.getElementById('format-type').value,
+            currencySymbol: document.getElementById('currency-symbol').value || '$',
+            decimals: parseInt(document.getElementById('decimals').value, 10),
+            conditions: []
+        };
+
+        document.querySelectorAll('.condition-row').forEach(row => {
+            const operator = row.querySelector('.condition-operator').value;
+            const compareType = row.querySelector('.condition-compare-type').value;
+            const value = compareType === 'value' ? 
+                row.querySelector('.condition-value').value :
+                row.querySelector('.condition-field').value;
+            const fontColor = row.querySelector('.condition-font').value.replace('#', '');
+            const bgColor = row.querySelector('.condition-bg').value.replace('#', '');
+            const shape = row.querySelector('.condition-shape').value.trim();
+
+            formatSettings[currentFormattingColumn].conditions.push({
+                operator,
+                compareType,
+                value,
+                fontColor,
+                bgColor,
+                shape
+            });
+        });
+
+        closeFormatSettings();
+        generatePivotTable();
+    }
+
+    function createGroupCell(value, columnId, rowBgColor = null) {
+        const td = document.createElement('td');
+        const settings = formatSettings[columnId] || {};
+        const textValue = value?.toString() ?? '';
+
+        td.setAttribute('data-value', textValue);
+        td.setAttribute('data-column-id', columnId);
+        td.textContent = textValue;
+
+        let conditionApplied = false;
+        if (Array.isArray(settings.conditions)) {
+            for (const cond of settings.conditions) {
+                let conditionMet = false;
+                if (cond.operator === '==' && textValue === cond.value?.toString()) {
+                    conditionMet = true;
+                } else if (['>', '<'].includes(cond.operator)) {
+                    const numValue = parseFloat(textValue);
+                    const condValue = parseFloat(cond.value);
+                    if (!isNaN(numValue) && !isNaN(condValue)) {
+                        conditionMet = cond.operator === '>' ? numValue > condValue : numValue < condValue;
+                    }
+                }
+                if (conditionMet) {
+                    td.style.color = `#${cond.fontColor}`;
+                    conditionApplied = true;
+                    break;
+                }
+            }
+        }
+
+        if (!conditionApplied) {
+            td.style.color = `#${settings.fontColor || '000000'}`;
+        }
+
+        td.style.backgroundColor = rowBgColor ? `#${rowBgColor}` : `#${settings.bgColor || 'FFFFFF'}`;
+        return td;
+    }
+
+    function createValueCell(value, columnId, rowBgColor = null) {
+        const td = document.createElement('td');
+        const settings = formatSettings[columnId] || {};
+        const decimals = settings.decimals ?? 2;
+        const formatType = settings.formatType ?? 'number';
+        const currencySymbol = settings.currencySymbol || '$';
+
+        td.setAttribute('data-value', value);
+        td.setAttribute('data-column-id', columnId);
+
+        let formattedValue;
+        if (formatType === 'text') {
+            formattedValue = value.toString();
+        } else if (decimals === 0) {
+            switch (formatType) {
+                case 'currency': formattedValue = currencySymbol + Math.round(value); break;
+                case 'percentage': formattedValue = Math.round(value * 100) + '%'; break;
+                default: formattedValue = Math.round(value);
+            }
+        } else {
+            switch (formatType) {
+                case 'currency': formattedValue = currencySymbol + value.toFixed(decimals); break;
+                case 'percentage': formattedValue = (value * 100).toFixed(decimals) + '%'; break;
+                default: formattedValue = value.toFixed(decimals);
+            }
+        }
+
+        let matchedCondition = null;
+        for (const cond of (settings.conditions || [])) {
+            let conditionMet = false;
+            let compareValue;
+
+            if (cond.compareType === 'field') {
+                const rowData = allData.find(row => row[columnId] == value);
+                compareValue = rowData ? rowData[cond.value] : null;
+            } else {
+                compareValue = cond.value;
+            }
+
+            const currentNum = parseFloat(value);
+            const compareNum = parseFloat(compareValue);
+            const isNumeric = !isNaN(currentNum) && !isNaN(compareNum);
+
+            switch (cond.operator) {
+                case '>': conditionMet = isNumeric ? currentNum > compareNum : value > compareValue; break;
+                case '<': conditionMet = isNumeric ? currentNum < compareNum : value < compareValue; break;
+                case '==': conditionMet = value.toString() === compareValue?.toString(); break;
+            }
+
+            if (conditionMet) {
+                matchedCondition = cond;
+                break;
+            }
+        }
+
+        if (matchedCondition) {
+            td.style.color = `#${matchedCondition.fontColor}`;
+            td.style.backgroundColor = rowBgColor ? `#${rowBgColor}` : `#${matchedCondition.bgColor}`;
+            if (matchedCondition.shape) {
+                const contentSpan = document.createElement('span');
+                contentSpan.style.whiteSpace = 'nowrap';
+                contentSpan.textContent = `${matchedCondition.shape} ${formattedValue}`;
+                td.appendChild(contentSpan);
+            } else {
+                td.textContent = formattedValue;
+            }
+        } else {
+            td.textContent = formattedValue;
+            td.style.color = `#${settings.fontColor || '000000'}`;
+            td.style.backgroundColor = rowBgColor ? `#${rowBgColor}` : `#${settings.bgColor || 'FFFFFF'}`;
+        }
+
+        return td;
+    }
+
+    function getRowBackgroundColor(rowValues, groupCols, maxLevel = null) {
+        if (!groupCols.length) return null;
+
+        for (let i = 0; i < groupCols.length && (maxLevel === null || i <= maxLevel); i++) {
+            const colId = groupCols[i].id;
+            const settings = formatSettings[colId] || {};
+            const textValue = rowValues[i]?.toString() ?? '';
+
+            if (Array.isArray(settings.conditions)) {
+                for (const cond of settings.conditions) {
+                    let conditionMet = false;
+                    if (cond.operator === '==' && textValue === cond.value?.toString()) {
+                        conditionMet = true;
+                    } else if (['>', '<'].includes(cond.operator)) {
+                        const numValue = parseFloat(textValue);
+                        const condValue = parseFloat(cond.value);
+                        if (!isNaN(numValue) && !isNaN(condValue)) {
+                            conditionMet = cond.operator === '>' ? numValue > condValue : numValue < condValue;
+                        }
+                    }
+                    if (conditionMet) {
+                        return cond.bgColor;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    function generateAllCombinations(pivotCols) {
+        if (pivotCols.length === 0) return [{}];
+
+        const seen = new Set();
+        const validCombinations = [];
+
+        allData.forEach(row => {
+            const combo = {};
+            pivotCols.forEach(p => combo[p.id] = row[p.id]?.toString() || '');
+            const key = JSON.stringify(combo);
+            if (!seen.has(key)) {
+                seen.add(key);
+                validCombinations.push(combo);
+            }
+        });
+
+        return validCombinations;
+    }
+
+    function createHeaderStructure(pivotCols, combinations) {
+        if (!pivotCols.length) return [];
+
+        const field = pivotCols[0].id;
+        const groups = new Map();
+
+        combinations.forEach(combo => {
+            const value = combo[field];
+            if (!groups.has(value)) {
+                groups.set(value, {
+                    value: value,
+                    span: 1,
+                    children: pivotCols.length > 1 ?
+                        createHeaderStructure(pivotCols.slice(1), combinations.filter(c => c[field] === value)) : null
+                });
+            } else {
+                groups.get(value).span++;
+            }
+        });
+
+        return Array.from(groups.values());
+    }
+
+    function createHeaderLevels(pivotCols, structure, levels = [], depth = 0) {
+        if (!structure || structure.length === 0) return levels;
+
+        levels[depth] = levels[depth] || [];
+        structure.forEach(group => {
+            levels[depth].push({ value: group.value, span: group.span });
+            if (group.children) {
+                createHeaderLevels(pivotCols.slice(1), group.children, levels, depth + 1);
+            }
+        });
+
+        for (let i = depth + 1; i < pivotCols.length; i++) {
+            levels[i] = levels[i] || [];
+        }
+
+        return levels;
+    }
+
+    async function generatePivotTable(isUserInitiated = false) {
+        const groupCols = getConfig('group');
+        const pivotCols = getConfig('pivot');
+        const valueCols = getConfig('value');
+        const showRowTotals = document.getElementById('show-row-totals').checked;
+        const showColumnTotals = document.getElementById('show-column-totals').checked;
+        const showSubtotals = document.getElementById('show-subtotals').checked;
+
+        if (!groupCols.length || !valueCols.length) {
+            alert('Please select at least one Row Group and one Value');
+            return;
+        }
+
+        const selectedSubtotalLevels = Array.from(document.getElementById('subtotal-level-select').selectedOptions)
+            .map(opt => parseInt(opt.value, 10));
+
+        const pivotMap = new Map();
+        const rowKeysSet = new Set();
+        const colKeysSet = new Set();
+
+        allData.forEach(row => {
+            const rowKey = groupCols.map(g => row[g.id]).join('|');
+            const colKey = pivotCols.map(p => row[p.id]).join('|');
+            const mapKey = `${rowKey}>>>${colKey}`;
+
+            rowKeysSet.add(rowKey);
+            colKeysSet.add(colKey);
+
+            if (!pivotMap.has(mapKey)) pivotMap.set(mapKey, {});
+            valueCols.forEach(v => {
+                const numValue = parseFloat(row[v.id]) || 0;
+                pivotMap.get(mapKey)[v.id] = (pivotMap.get(mapKey)[v.id] || 0) + numValue;
+            });
+        });
+
+        const rowKeys = Array.from(rowKeysSet);
+        const colKeys = Array.from(colKeysSet);
+
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        const tbody = document.createElement('tbody');
+        table.id = 'pivot-table';
+
+        for (let i = 0; i < headerRowsCount; i++) {
+            const settings = headerRowSettings[i] || {
+                type: 'text',
+                text: `Header Row ${i + 1}`,
+                column: '',
+                fontColor: '000000',
+                bgColor: 'F8F9FA',
+                textAlign: 'left'
+            };
+
+            let headerText = '';
+            if (settings.type === 'text') {
+                headerText = settings.text;
+            } else if (settings.type === 'column') {
+                headerText = titleColumnMap[settings.column] || '';
+            } else if (settings.type === 'filters') {
+                const filters = await tableau.extensions.dashboardContent.dashboard.getFiltersAsync();
+                const filterLines = [];
+                for (const filter of filters) {
+                    if (filter.filterType === 'categorical') {
+                        const fieldName = filter.fieldName;
+                        const appliedValues = filter.appliedValues;
+                        const valuesText = appliedValues.length === 0 ? 'All' : appliedValues.map(val => val.value).join(', ');
+                        filterLines.push(`${fieldName}: ${valuesText}`);
+                    }
+                }
+                headerText = filterLines.length > 0 ? filterLines.join('\n') : 'No filters applied';
+            }
+
+            const headerRow = document.createElement('tr');
+            const headerCell = document.createElement('th');
+            headerCell.style.cursor = 'pointer';
+            headerCell.onclick = () => configureHeaderRow(i);
+            headerCell.innerHTML = headerText.replace(/\n/g, '<br>');
+            headerCell.colSpan = groupCols.length + (colKeys.length * valueCols.length) + (showRowTotals ? valueCols.length : 0);
+            headerCell.style.color = `#${settings.fontColor}`;
+            headerCell.style.backgroundColor = `#${settings.bgColor}`;
+            headerCell.style.textAlign = settings.textAlign;
+            headerCell.style.whiteSpace = 'pre-wrap';
+
+            headerRow.appendChild(headerCell);
+            thead.appendChild(headerRow);
+        }
+
+        if (tableTitle) {
+            const titleRow = document.createElement('tr');
+            const titleCell = document.createElement('th');
+            titleCell.colSpan = groupCols.length + (colKeys.length * valueCols.length) + (showRowTotals ? valueCols.length : 0);
+            titleCell.textContent = tableTitle;
+            titleCell.className = 'table-title';
+            titleCell.style.color = `#${titleFontColor}`;
+            titleCell.style.backgroundColor = `#${titleBgColor}`;
+            titleCell.style.textAlign = titleAlignment;
+            titleRow.appendChild(titleCell);
+            thead.appendChild(titleRow);
+        }
+
+        if (pivotCols.length > 0) {
+            const structure = createHeaderStructure(pivotCols, generateAllCombinations(pivotCols));
+            const levels = createHeaderLevels(pivotCols, structure);
+            const headerDepth = levels.length;
+
+            const groupHeaderRow = document.createElement('tr');
+            groupCols.forEach(gc => {
+                const th = document.createElement('th');
+                th.textContent = fieldRenames[gc.id] || gc.name;
+                th.rowSpan = headerDepth + (valueCols.length > 1 ? 1 : 0);
+                applyHeaderStyles(th, 'rowGroups');
+                groupHeaderRow.appendChild(th);
+            });
+
+            levels[0].forEach(cell => {
+                const th = document.createElement('th');
+                th.textContent = cell.value;
+                th.colSpan = valueCols.length > 1 ? cell.span * valueCols.length : cell.span;
+                th.classList.add('group-header');
+                applyHeaderStyles(th, 'columnGroups');
+                groupHeaderRow.appendChild(th);
+            });
+
+            if (showRowTotals) {
+                const th = document.createElement('th');
+                th.textContent = 'Row Totals';
+                th.rowSpan = headerDepth;
+                th.colSpan = valueCols.length;
+                th.classList.add('grand-total');
+                applyHeaderStyles(th, 'totals');
+                groupHeaderRow.appendChild(th);
+            }
+
+            thead.appendChild(groupHeaderRow);
+
+            for (let depth = 1; depth < levels.length; depth++) {
+                const headerRow = document.createElement('tr');
+                levels[depth].forEach(cell => {
+                    const th = document.createElement('th');
+                    th.textContent = cell.value;
+                    th.colSpan = valueCols.length > 1 ? cell.span * valueCols.length : cell.span;
+                    th.classList.add('group-header');
+                    applyHeaderStyles(th, 'columnGroups');
+                    headerRow.appendChild(th);
+                });
+                thead.appendChild(headerRow);
+            }
+
+            if (valueCols.length > 1) {
+                const valueRow = document.createElement('tr');
+                colKeys.forEach(() => {
+                    valueCols.forEach(vc => {
+                        const th = document.createElement('th');
+                        th.textContent = fieldRenames[vc.id] || vc.name;
+                        applyHeaderStyles(th, 'columnGroups');
+                        valueRow.appendChild(th);
+                    });
+                });
+
+                if (showRowTotals) {
+                    valueCols.forEach(vc => {
+                        const th = document.createElement('th');
+                        th.textContent = fieldRenames[vc.id] || vc.name;
+                        applyHeaderStyles(th, 'totals');
+                        valueRow.appendChild(th);
+                    });
+                }
+
+                thead.appendChild(valueRow);
+            }
+        } else {
+            const headerRow = document.createElement('tr');
+            groupCols.forEach(gc => {
+                const th = document.createElement('th');
+                th.textContent = fieldRenames[gc.id] || gc.name;
+                applyHeaderStyles(th, 'rowGroups');
+                headerRow.appendChild(th);
+            });
+
+            valueCols.forEach(vc => {
+                const th = document.createElement('th');
+                th.textContent = fieldRenames[vc.id] || vc.name;
+                applyHeaderStyles(th, 'columnGroups');
+                headerRow.appendChild(th);
+            });
+
+            if (showRowTotals) {
+                valueCols.forEach(vc => {
+                    const th = document.createElement('th');
+                    th.textContent = fieldRenames[vc.id] || vc.name;
+                    applyHeaderStyles(th, 'totals');
+                    headerRow.appendChild(th);
+                });
+            }
+
+            thead.appendChild(headerRow);
+        }
+
+        table.appendChild(thead);
+
+        let prevGroupValues = null;
+
+        rowKeys.forEach((rowKey, rowIndex) => {
+            const rowValues = rowKey.split('|');
+            const rowBgColor = getRowBackgroundColor(rowValues, groupCols);
+
+            if (showSubtotals && prevGroupValues !== null) {
+                for (let level = groupCols.length - 1; level >= 0; level--) {
+                    if (prevGroupValues[level] !== rowValues[level] && selectedSubtotalLevels.includes(level)) {
+                        insertSubtotalRow(level, groupCols, prevGroupValues, colKeys, valueCols, pivotMap, tbody, null, showRowTotals);
+                    }
+                }
+            }
+
+            const row = document.createElement('tr');
+            rowValues.forEach((value, index) => {
+                const td = createGroupCell(value, groupCols[index].id, rowBgColor);
+                row.appendChild(td);
+            });
+
+            const rowTotal = {};
+            valueCols.forEach(v => rowTotal[v.id] = 0);
+
+            colKeys.forEach(colKey => {
+                const mapKey = `${rowKey}>>>${colKey}`;
+                const cellData = pivotMap.get(mapKey) || {};
+                valueCols.forEach(v => {
+                    const value = cellData[v.id] || 0;
+                    const td = createValueCell(value, v.id, rowBgColor);
+                    row.appendChild(td);
+                    rowTotal[v.id] += value;
+                });
+            });
+
+            if (showRowTotals) {
+                valueCols.forEach(v => {
+                    const td = createValueCell(rowTotal[v.id], v.id, rowBgColor);
+                    td.classList.add('grand-total');
+                    row.appendChild(td);
+                });
+            }
+
+            tbody.appendChild(row);
+            prevGroupValues = rowValues;
+        });
+
+        if (showSubtotals && prevGroupValues !== null) {
+            for (let level = groupCols.length - 1; level >= 0; level--) {
+                if (selectedSubtotalLevels.includes(level)) {
+                    insertSubtotalRow(level, groupCols, prevGroupValues, colKeys, valueCols, pivotMap, tbody, null, showRowTotals);
+                }
+            }
+        }
+
+        if (showColumnTotals) {
+            const footerRow = document.createElement('tr');
+            footerRow.classList.add('grand-total');
+
+            const colTotals = {};
+            colKeys.forEach(colKey => {
+                colTotals[colKey] = {};
+                valueCols.forEach(v => colTotals[colKey][v.id] = 0);
+            });
+
+            rowKeys.forEach(rowKey => {
+                colKeys.forEach(colKey => {
+                    const mapKey = `${rowKey}>>>${colKey}`;
+                    const cellData = pivotMap.get(mapKey) || {};
+                    valueCols.forEach(v => {
+                        colTotals[colKey][v.id] += cellData[v.id] || 0;
+                    });
+                });
+            });
+
+            groupCols.forEach((gc, index) => {
+                const td = document.createElement('td');
+                td.textContent = index === 0 ? 'Grand Total' : '';
+                applyHeaderStyles(td, 'rowGroups');
+                footerRow.appendChild(td);
+            });
+
+            colKeys.forEach(colKey => {
+                valueCols.forEach(v => {
+                    const td = createValueCell(colTotals[colKey][v.id], v.id);
+                    td.classList.add('grand-total');
+                    footerRow.appendChild(td);
+                });
+            });
+
+            if (showRowTotals) {
+                valueCols.forEach(v => {
+                    let grandSum = 0;
+                    colKeys.forEach(colKey => {
+                        grandSum += colTotals[colKey][v.id] || 0;
+                    });
+                    const td = createValueCell(grandSum, v.id);
+                    td.classList.add('grand-total');
+                    footerRow.appendChild(td);
+                });
+            }
+
+            tbody.appendChild(footerRow);
+        }
+
+        table.appendChild(tbody);
+        document.getElementById('data-container').innerHTML = '';
+        document.getElementById('data-container').appendChild(table);
+    }
+
+    function insertSubtotalRow(level, groupCols, currentGroupValues, colKeys, valueCols, pivotMap, tbody, referenceRow, showRowTotals) {
+        const subtotalRow = document.createElement('tr');
+        subtotalRow.classList.add('subtotal-row');
+
+        const rowBgColor = getRowBackgroundColor(currentGroupValues, groupCols, level);
+
+        groupCols.forEach((gc, index) => {
+            const td = document.createElement('td');
+            if (index === level) {
+                td.textContent = `${currentGroupValues[level]} Subtotal`;
+                td.style.fontWeight = 'bold';
+            } else if (index < level) {
+                td.textContent = currentGroupValues[index];
+            } else {
+                td.textContent = '';
+            }
+            td.style.backgroundColor = rowBgColor ? `#${rowBgColor}` : `#${headerFormatSettings.subtotals?.bgColor || 'F8F9FA'}`;
+            subtotalRow.appendChild(td);
+        });
+
+        colKeys.forEach(colKey => {
+            valueCols.forEach(v => {
+                const groupPrefix = currentGroupValues.slice(0, level + 1).join('|');
+                const subtotalValue = Array.from(pivotMap.entries())
+                    .filter(([key]) => key.startsWith(groupPrefix))
+                    .reduce((sum, [key, data]) => {
+                        const [, colPart] = key.split('>>>');
+                        return colPart === colKey ? sum + (data[v.id] || 0) : sum;
+                    }, 0);
+
+                const td = createValueCell(subtotalValue, v.id, rowBgColor);
+                td.style.backgroundColor = rowBgColor ? `#${rowBgColor}` : `#${headerFormatSettings.subtotals?.bgColor || 'F8F9FA'}`;
+                subtotalRow.appendChild(td);
+            });
+        });
+
+        if (showRowTotals) {
+            valueCols.forEach(v => {
+                const groupPrefix = currentGroupValues.slice(0, level + 1).join('|');
+                const rowTotal = Array.from(pivotMap.entries())
+                    .filter(([key]) => key.startsWith(groupPrefix))
+                    .reduce((sum, [_, data]) => sum + (data[v.id] || 0), 0);
+
+                const td = createValueCell(rowTotal, v.id, rowBgColor);
+                td.classList.add('subtotal');
+                td.style.backgroundColor = rowBgColor ? `#${rowBgColor}` : `#${headerFormatSettings.subtotals?.bgColor || 'F8F9FA'}`;
+                td.style.fontWeight = 'bold';
+                subtotalRow.appendChild(td);
+            });
+        }
+
+        tbody.insertBefore(subtotalRow, referenceRow ? referenceRow.nextSibling : null);
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        try {
+            await tableau.extensions.initializeDialogAsync();
+            await fetchWorksheetData();
+            await loadConfiguration();
+
+            document.getElementById('generate-btn').addEventListener('click', generatePivotTable);
+            document.getElementById('save-btn').addEventListener('click', saveConfiguration);
+
+            document.getElementById('format-type').addEventListener('change', (e) => {
+                document.getElementById('currency-symbol-container').style.display = e.target.value === 'currency' ? 'flex' : 'none';
+                document.getElementById('decimals-container').style.display = ['number', 'currency', 'percentage'].includes(e.target.value) ? 'flex' : 'none';
+            });
+
+            document.getElementById('table-title').addEventListener('input', (e) => {
+                tableTitle = e.target.value;
+                document.getElementById('title-column').value = '';
+                generatePivotTable(false);
+            });
+
+            document.getElementById('title-column').addEventListener('change', (e) => {
+                if (e.target.value) {
+                    tableTitle = titleColumnMap[e.target.value] || '';
+                    document.getElementById('table-title').value = '';
+                }
+                generatePivotTable(false);
+            });
+
+            document.getElementById('title-font-color').addEventListener('input', (e) => {
+                titleFontColor = e.target.value.replace('#', '');
+                generatePivotTable(false);
+            });
+
+            document.getElementById('title-bg-color').addEventListener('input', (e) => {
+                titleBgColor = e.target.value.replace('#', '');
+                generatePivotTable(false);
+            });
+
+            document.getElementById('title-alignment').addEventListener('change', (e) => {
+                titleAlignment = e.target.value;
+                generatePivotTable(false);
+            });
+
+            ['show-subtotals', 'show-row-totals', 'show-column-totals', 'subtotal-level-select'].forEach(id => {
+                document.getElementById(id).addEventListener('change', generatePivotTable);
+            });
+
+            document.getElementById('workbook-file-name').addEventListener('input', (e) => {
+                document.getElementById('excel-file-name-field').value = '';
+            });
+
+            document.getElementById('excel-file-name-field').addEventListener('change', (e) => {
+                if (e.target.value) {
+                    document.getElementById('workbook-file-name').value = '';
+                }
+            });
+        } catch (error) {
+            console.error('Initialization error:', error);
+            alert('Initialization failed: ' + error.message);
+        }
+    });
+    </script>
+</body>
+</html>

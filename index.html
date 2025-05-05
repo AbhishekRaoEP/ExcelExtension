@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="lib/tableau.extensions.1.latest.js"></script>
+    <title>Pivot Table Generator</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: #f8f9fa;
+        }
+        img#export-btn {
+            width: 35px;
+            height: 35px;
+            padding: 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s;
+        }
+        img#export-btn:hover {
+            transform: scale(1.05);
+            opacity: 0.8;
+        }
+        table td {
+            white-space: nowrap;
+        }
+        table td span {
+            display: inline-flex;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <img id="export-btn" src="http://localhost:8080/excel-icon.svg" alt="Export to Excel" title="Export to Excel">
+    
+    <script>
+    let allData = [];
+    let columns = [];
+    let formatSettings = {};
+    let fieldRenames = {};
+    let headerFormatSettings = {
+        rowGroups: { fontColor: '000000', bgColor: 'F1F3F5', textAlign: 'left' },
+        columnGroups: { fontColor: '000000', bgColor: 'E9ECEF', textAlign: 'center' },
+        totals: { fontColor: '000000', bgColor: 'E9ECEF', textAlign: 'right' },
+        subtotals: { fontColor: '000000', bgColor: 'F8F9FA', textAlign: 'left' }
+    };
+    let headerRowsCount = 0;
+    let headerRowSettings = [];
+    let tableTitle = '';
+    let titleFontColor = '000000';
+    let titleBgColor = 'F8F9FA';
+    let titleAlignment = 'center';
+    let titleColumnMap = {};
+
+    async function loadConfiguration() {
+        const savedConfig = tableau.extensions.settings.get('config');
+        if (!savedConfig) return null;
+
+        try {
+            const config = JSON.parse(savedConfig);
+            formatSettings = config.formatSettings || {};
+            fieldRenames = config.fieldRenames || {};
+            headerFormatSettings = config.headerFormatSettings || {
+                rowGroups: { fontColor: '000000', bgColor: 'F1F3F5', textAlign: 'left' },
+                columnGroups: { fontColor: '000000', bgColor: 'E9ECEF', textAlign: 'center' },
+                totals: { fontColor: '000000', bgColor: 'E9ECEF', textAlign: 'right' },
+                subtotals: { fontColor: '000000', bgColor: 'F8F9FA', textAlign: 'left' }
+            };
+            headerRowsCount = config.headerRowsCount || 0;
+            headerRowSettings = config.headerRowSettings || [];
+            tableTitle = config.tableTitle || '';
+            titleFontColor = config.titleFontColor || '000000';
+            titleBgColor = config.titleBgColor || 'F8F9FA';
+            titleAlignment = config.titleAlignment || 'center';
+            return config;
+        } catch (error) {
+            console.error('Error loading configuration:', error);
+            return null;
+        }
+    }
+
+    function getRowBackgroundColor(rowValues, groupCols, maxLevel = null) {
+        if (!groupCols.length) return null;
+
+        for (let i = 0; i < groupCols.length && (maxLevel === null || i <= maxLevel); i++) {
+            const colId = groupCols[i].id;
+            const settings = formatSettings[colId] || {};
+            const textValue = rowValues[i]?.toString() ?? '';
+
+            if (Array.isArray(settings.conditions)) {
+                for (const cond of settings.conditions) {
+                    let conditionMet = false;
+                    if (cond.operator === '==' && textValue === cond.value?.toString()) {
+                        conditionMet = true;
+                    } else if (['>', '<'].includes(cond.operator)) {
+                        const numValue = parseFloat(textValue);
+                        const condValue = parseFloat(cond.value);
+                        if (!isNaN(numValue) && !isNaN(condValue)) {
+                            conditionMet = cond.operator === '>' ? numValue > condValue : numValue < condValue;
+                        }
+                    }
+                    if (conditionMet) {
+                        return cond.bgColor;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    function createGroupCell(value, columnId, rowBgColor = null) {
+        const td = document.createElement('td');
+        const settings = formatSettings[columnId] || {};
+        const textValue = value?.toString() ?? '';
+
+        td.setAttribute('data-value', textValue);
+        td.setAttribute('data-column-id', columnId);
+        td.textContent = textValue;
+
+        let conditionApplied = false;
+        if (Array.isArray(settings.conditions)) {
+            for (const cond of settings.conditions) {
+                let conditionMet = false;
+                if (cond.operator === '==' && textValue === cond.value?.toString()) {
+                    conditionMet = true;
+                } else if (['>', '<'].includes(cond.operator)) {
+                    const numValue = parseFloat(textValue);
+                    const condValue = parseFloat(cond.value);
+                    if (!isNaN(numValue) && !isNaN(condValue)) {
+                        conditionMet = cond.operator === '>' ? numValue > condValue : numValue < condValue;
+                    }
+                }
+                if (conditionMet) {
+                    td.style.color = `#${cond.fontColor}`;
+                    conditionApplied = true;
+                    break;
+                }
+            }
+        }
+
+        if (!conditionApplied) {
+            td.style.color = `#${settings.fontColor || '000000'}`;
+        }
+
+        td.style.backgroundColor = rowBgColor ? `#${rowBgColor}` : `#${settings.bgColor || 'FFFFFF'}`;
+        td.style.textAlign = settings.textAlign || 'left';
+
+        return td;
+    }
+
+    function createValueCell(value, columnId, rowBgColor = null, isTotal = false, headerType = null) {
+        const td = document.createElement('td');
+        const settings = formatSettings[columnId] || {};
+        const decimals = settings.decimals ?? 2;
+        const formatType = settings.formatType ?? 'number';
+        const currencySymbol = settings.currencySymbol || '$';
+
+        td.setAttribute('data-value', value);
+        td.setAttribute('data-column-id', columnId);
+
+        let formattedValue;
+        if (formatType === 'text') {
+            formattedValue = value.toString();
+        } else if (decimals === 0) {
+            switch (formatType) {
+                case 'currency':
+                    formattedValue = currencySymbol + Math.round(value);
+                    break;
+                case 'percentage':
+                    formattedValue = Math.round(value * 100) + '%';
+                    break;
+                default:
+                    formattedValue = Math.round(value);
+            }
+        } else {
+            switch (formatType) {
+                case 'currency':
+                    formattedValue = currencySymbol + value.toFixed(decimals);
+                    break;
+                case 'percentage':
+                    formattedValue = (value * 100).toFixed(decimals) + '%';
+                    break;
+                default:
+                    formattedValue = value.toFixed(decimals);
+            }
+        }
+
+        if (isTotal && headerType) {
+            const headerSettings = headerFormatSettings[headerType] || {};
+            td.textContent = formattedValue;
+            td.style.color = `#${headerSettings.fontColor || '000000'}`;
+            td.style.backgroundColor = rowBgColor ? `#${rowBgColor}` : `#${headerSettings.bgColor || 'FFFFFF'}`;
+            td.style.textAlign = headerSettings.textAlign || 'right';
+        } else {
+            // Apply conditional formatting for non-total cells
+            let matchedCondition = null;
+            for (const cond of (settings.conditions || [])) {
+                let conditionMet = false;
+                let compareValue;
+
+                if (cond.compareType === 'field') {
+                    const rowData = allData.find(row => row[columnId] == value);
+                    compareValue = rowData ? rowData[cond.value] : null;
+                } else {
+                    compareValue = cond.value;
+                }
+
+                const currentNum = parseFloat(value);
+                const compareNum = parseFloat(compareValue);
+                const isNumeric = !isNaN(currentNum) && !isNaN(compareNum);
+
+                switch (cond.operator) {
+                    case '>': 
+                        conditionMet = isNumeric ? currentNum > compareNum : value > compareValue;
+                        break;
+                    case '<': 
+                        conditionMet = isNumeric ? currentNum < compareNum : value < compareValue;
+                        break;
+                    case '==': 
+                        conditionMet = value.toString() === compareValue?.toString();
+                        break;
+                }
+
+                if (conditionMet) {
+                    matchedCondition = cond;
+                    break;
+                }
+            }
+
+            if (matchedCondition) {
+                td.style.color = `#${matchedCondition.fontColor}`;
+                td.style.backgroundColor = rowBgColor ? `#${rowBgColor}` : `#${matchedCondition.bgColor}`;
+                if (matchedCondition.shape) {
+                    const contentSpan = document.createElement('span');
+                    contentSpan.style.whiteSpace = 'nowrap';
+                    contentSpan.textContent = `${matchedCondition.shape} ${formattedValue}`;
+                    td.appendChild(contentSpan);
+                } else {
+                    td.textContent = formattedValue;
+                }
+            } else {
+                td.textContent = formattedValue;
+                td.style.color = `#${settings.fontColor || '000000'}`;
+                td.style.backgroundColor = rowBgColor ? `#${rowBgColor}` : `#${settings.bgColor || 'FFFFFF'}`;
+            }
+        }
+
+        return td;
+    }
+
+    function applyHeaderStyles(element, headerType) {
+        const settings = headerFormatSettings[headerType] || {};
+        element.style.color = `#${settings.fontColor || '000000'}`;
+        element.style.backgroundColor = `#${settings.bgColor || 'FFFFFF'}`;
+        element.style.textAlign = settings.textAlign || 'left';
+        element.style.border = '1px solid #808080';
+    }
+
+    async function generatePivotTable(config) {
+        const groupCols = config.groupColumns;
+        const pivotCols = config.pivotColumns;
+        const valueCols = config.valueColumns;
+        const showRowTotals = config.showRowTotals;
+        const showColumnTotals = config.showColumnTotals;
+        const showSubtotals = config.showSubtotals;
+        const selectedSubtotalLevels = config.selectedSubtotalLevels.map(level => parseInt(level, 10));
+
+        const pivotMap = new Map();
+        const rowKeysSet = new Set();
+        const colKeysSet = new Set();
+
+        allData.forEach(row => {
+            const rowKey = groupCols.map(g => row[g.id]).join('|');
+            const colKey = pivotCols.map(p => row[p.id]).join('|');
+            const mapKey = `${rowKey}>>>${colKey}`;
+
+            rowKeysSet.add(rowKey);
+            colKeysSet.add(colKey);
+
+            if (!pivotMap.has(mapKey)) pivotMap.set(mapKey, {});
+            valueCols.forEach(v => {
+                const numValue = parseFloat(row[v.id]) || 0;
+                pivotMap.get(mapKey)[v.id] = (pivotMap.get(mapKey)[v.id] || 0) + numValue;
+            });
+        });
+
+        const rowKeys = Array.from(rowKeysSet);
+        const colKeys = Array.from(colKeysSet);
+
+        const table = document.createElement('table');
+        const thead = document.createElement('thead');
+        const tbody = document.createElement('tbody');
+        table.id = 'pivot-table';
+
+        for (let i = 0; i < headerRowsCount; i++) {
+            const settings = headerRowSettings[i] || {
+                type: 'text',
+                text: `Header Row ${i + 1}`,
+                column: '',
+                fontColor: '000000',
+                bgColor: 'F8F9FA',
+                textAlign: 'left'
+            };
+
+            let headerText = '';
+            if (settings.type === 'text') {
+                headerText = settings.text;
+            } else if (settings.type === 'column') {
+                headerText = titleColumnMap[settings.column] || '';
+            } else if (settings.type === 'filters') {
+                const filters = await tableau.extensions.dashboardContent.dashboard.getFiltersAsync();
+                const filterLines = [];
+                for (const filter of filters) {
+                    if (filter.filterType === 'categorical') {
+                        const fieldName = filter.fieldName;
+                        const appliedValues = filter.appliedValues;
+                        const valuesText = appliedValues.length === 0 
+                            ? 'All' 
+                            : appliedValues.map(val => val.value).join(', ');
+                        filterLines.push(`${fieldName}: ${valuesText}`);
+                    }
+                }
+                headerText = filterLines.length > 0 ? filterLines.join('\n') : 'No filters applied';
+            }
+
+            const headerRow = document.createElement('tr');
+            const headerCell = document.createElement('th');
+            if (settings.type === 'filters') {
+                headerCell.innerHTML = headerText.replace(/\n/g, '<br>');
+                headerCell.setAttribute('style', 'white-space: pre-wrap; mso-number-format:"\\@";');
+            } else {
+                headerCell.textContent = headerText;
+            }
+            headerCell.colSpan = groupCols.length + (colKeys.length * valueCols.length) + (showRowTotals ? valueCols.length : 0);
+            headerCell.style.color = `#${settings.fontColor}`;
+            headerCell.style.backgroundColor = `#${settings.bgColor}`;
+            headerCell.style.textAlign = settings.textAlign;
+
+            headerRow.appendChild(headerCell);
+            thead.appendChild(headerRow);
+        }
+
+        if (tableTitle) {
+            const titleRow = document.createElement('tr');
+            const titleCell = document.createElement('th');
+            titleCell.colSpan = groupCols.length + (colKeys.length * valueCols.length) + (showRowTotals ? valueCols.length : 0);
+            titleCell.textContent = tableTitle;
+            titleCell.className = 'table-title';
+            titleCell.style.color = `#${titleFontColor}`;
+            titleCell.style.backgroundColor = `#${titleBgColor}`;
+            titleCell.style.textAlign = titleAlignment;
+            titleRow.appendChild(titleCell);
+            thead.appendChild(titleRow);
+        }
+
+        if (pivotCols.length > 0) {
+            const pivotValuesMap = new Map();
+            pivotCols.forEach(p => {
+                pivotValuesMap.set(p.id, [...new Set(allData.map(r => r[p.id]?.toString() ?? ''))]);
+            });
+
+            const allCombinations = generateAllCombinations(pivotCols, pivotValuesMap);
+            const structure = createHeaderStructure(pivotCols, allCombinations);
+            const levels = createHeaderLevels(pivotCols, structure);
+            const headerDepth = levels.length;
+
+            const groupHeaderRow = document.createElement('tr');
+            groupCols.forEach(gc => {
+                const th = document.createElement('th');
+                th.textContent = fieldRenames[gc.id] || gc.name;
+                th.rowSpan = headerDepth + (valueCols.length > 1 ? 1 : 0);
+                applyHeaderStyles(th, 'rowGroups');
+                groupHeaderRow.appendChild(th);
+            });
+
+            levels[0].forEach(cell => {
+                const th = document.createElement('th');
+                th.textContent = cell.value;
+                th.colSpan = valueCols.length > 1 ? cell.span * valueCols.length : cell.span;
+                th.classList.add('group-header');
+                applyHeaderStyles(th, 'columnGroups');
+                groupHeaderRow.appendChild(th);
+            });
+
+            if (showRowTotals) {
+                const th = document.createElement('th');
+                th.textContent = 'Row Totals';
+                th.rowSpan = headerDepth;
+                th.colSpan = valueCols.length;
+                th.classList.add('grand-total');
+                applyHeaderStyles(th, 'totals');
+                groupHeaderRow.appendChild(th);
+            }
+
+            thead.appendChild(groupHeaderRow);
+
+            for (let depth = 1; depth < levels.length; depth++) {
+                const headerRow = document.createElement('tr');
+                levels[depth].forEach(cell => {
+                    const th = document.createElement('th');
+                    th.textContent = cell.value;
+                    th.colSpan = valueCols.length > 1 ? cell.span * valueCols.length : cell.span;
+                    th.classList.add('group-header');
+                    applyHeaderStyles(th, 'columnGroups');
+                    headerRow.appendChild(th);
+                });
+                thead.appendChild(headerRow);
+            }
+
+            if (valueCols.length > 1) {
+                const valueRow = document.createElement('tr');
+                colKeys.forEach(() => {
+                    valueCols.forEach(vc => {
+                        const th = document.createElement('th');
+                        th.textContent = fieldRenames[vc.id] || vc.name;
+                        applyHeaderStyles(th, 'columnGroups');
+                        valueRow.appendChild(th);
+                    });
+                });
+
+                if (showRowTotals) {
+                    valueCols.forEach(vc => {
+                        const th = document.createElement('th');
+                        th.textContent = fieldRenames[vc.id] || vc.name;
+                        applyHeaderStyles(th, 'totals');
+                        valueRow.appendChild(th);
+                    });
+                }
+
+                thead.appendChild(valueRow);
+            }
+        } else {
+            const headerRow = document.createElement('tr');
+            groupCols.forEach(gc => {
+                const th = document.createElement('th');
+                th.textContent = fieldRenames[gc.id] || gc.name;
+                applyHeaderStyles(th, 'rowGroups');
+                headerRow.appendChild(th);
+            });
+
+            valueCols.forEach(vc => {
+                const th = document.createElement('th');
+                th.textContent = fieldRenames[vc.id] || vc.name;
+                applyHeaderStyles(th, 'columnGroups');
+                headerRow.appendChild(th);
+            });
+
+            if (showRowTotals) {
+                valueCols.forEach(vc => {
+                    const th = document.createElement('th');
+                    th.textContent = fieldRenames[vc.id] || vc.name;
+                    applyHeaderStyles(th, 'totals');
+                    headerRow.appendChild(th);
+                });
+            }
+
+            thead.appendChild(headerRow);
+        }
+
+        table.appendChild(thead);
+
+        let prevGroupValues = null;
+
+        rowKeys.forEach((rowKey, rowIndex) => {
+            const rowValues = rowKey.split('|');
+            const rowBgColor = getRowBackgroundColor(rowValues, groupCols);
+
+            if (showSubtotals && prevGroupValues !== null) {
+                for (let level = groupCols.length - 1; level >= 0; level--) {
+                    if (prevGroupValues[level] !== rowValues[level] &&
+                        selectedSubtotalLevels.includes(level)) {
+                        insertSubtotalRow(
+                            level,
+                            groupCols,
+                            prevGroupValues,
+                            colKeys,
+                            valueCols,
+                            pivotMap,
+                            tbody,
+                            null,
+                            showRowTotals
+                        );
+                    }
+                }
+            }
+
+            const row = document.createElement('tr');
+            rowValues.forEach((value, index) => {
+                const td = createGroupCell(value, groupCols[index].id, rowBgColor);
+                row.appendChild(td);
+            });
+
+            const rowTotal = {};
+            valueCols.forEach(v => rowTotal[v.id] = 0);
+
+            colKeys.forEach(colKey => {
+                const mapKey = `${rowKey}>>>${colKey}`;
+                const cellData = pivotMap.get(mapKey) || {};
+                valueCols.forEach(v => {
+                    const value = cellData[v.id] || 0;
+                    const td = createValueCell(value, v.id, rowBgColor);
+                    row.appendChild(td);
+                    rowTotal[v.id] += value;
+                });
+            });
+
+            if (showRowTotals) {
+                valueCols.forEach(v => {
+                    const td = createValueCell(rowTotal[v.id], v.id, rowBgColor, true, 'totals');
+                    td.classList.add('grand-total');
+                    row.appendChild(td);
+                });
+            }
+
+            tbody.appendChild(row);
+            prevGroupValues = rowValues;
+        });
+
+        if (showSubtotals && prevGroupValues !== null) {
+            for (let level = groupCols.length - 1; level >= 0; level--) {
+                if (selectedSubtotalLevels.includes(level)) {
+                    insertSubtotalRow(
+                        level,
+                        groupCols,
+                        prevGroupValues,
+                        colKeys,
+                        valueCols,
+                        pivotMap,
+                        tbody,
+                        null,
+                        showRowTotals
+                    );
+                }
+            }
+        }
+
+        if (showColumnTotals) {
+            const footerRow = document.createElement('tr');
+            footerRow.classList.add('grand-total');
+
+            const colTotals = {};
+            colKeys.forEach(colKey => {
+                colTotals[colKey] = {};
+                valueCols.forEach(v => colTotals[colKey][v.id] = 0);
+            });
+
+            rowKeys.forEach(rowKey => {
+                colKeys.forEach(colKey => {
+                    const mapKey = `${rowKey}>>>${colKey}`;
+                    const cellData = pivotMap.get(mapKey) || {};
+                    valueCols.forEach(v => {
+                        colTotals[colKey][v.id] += cellData[v.id] || 0;
+                    });
+                });
+            });
+
+            groupCols.forEach((gc, index) => {
+                const td = document.createElement('td');
+                td.textContent = index === 0 ? 'Grand Total' : '';
+                applyHeaderStyles(td, 'rowGroups');
+                footerRow.appendChild(td);
+            });
+
+            colKeys.forEach(colKey => {
+                valueCols.forEach(v => {
+                    const td = createValueCell(colTotals[colKey][v.id], v.id, null, true, 'totals');
+                    td.classList.add('grand-total');
+                    footerRow.appendChild(td);
+                });
+            });
+
+            if (showRowTotals) {
+                valueCols.forEach(v => {
+                    let grandSum = 0;
+                    colKeys.forEach(colKey => {
+                        grandSum += colTotals[colKey][v.id] || 0;
+                    });
+                    const td = createValueCell(grandSum, v.id, null, true, 'totals');
+                    td.classList.add('grand-total');
+                    footerRow.appendChild(td);
+                });
+            }
+
+            tbody.appendChild(footerRow);
+        }
+
+        table.appendChild(tbody);
+        return table;
+    }
+
+    function insertSubtotalRow(level, groupCols, currentGroupValues, colKeys, valueCols, pivotMap, tbody, referenceRow, showRowTotals) {
+        const subtotalRow = document.createElement('tr');
+        subtotalRow.classList.add('subtotal-row');
+
+        const rowBgColor = getRowBackgroundColor(currentGroupValues, groupCols, level);
+        const fallbackBg = `#${headerFormatSettings.subtotals?.bgColor || 'F8F9FA'}`;
+
+        groupCols.forEach((gc, index) => {
+            const td = document.createElement('td');
+            if (index === level) {
+                td.textContent = `${currentGroupValues[level]} Subtotal`;
+                td.style.fontWeight = 'bold';
+            } else if (index < level) {
+                td.textContent = currentGroupValues[index];
+            } else {
+                td.textContent = '';
+            }
+            td.style.backgroundColor = rowBgColor ? `#${rowBgColor}` : fallbackBg;
+            td.style.textAlign = headerFormatSettings.subtotals?.textAlign || 'left';
+            td.style.color = `#${headerFormatSettings.subtotals.fontColor}`;
+            subtotalRow.appendChild(td);
+        });
+
+        colKeys.forEach(colKey => {
+            valueCols.forEach(v => {
+                const groupPrefix = currentGroupValues.slice(0, level + 1).join('|');
+                const subtotalValue = Array.from(pivotMap.entries())
+                    .filter(([key]) => {
+                        const [rowPart] = key.split('>>>');
+                        return rowPart.startsWith(groupPrefix);
+                    })
+                    .reduce((sum, [key, data]) => {
+                        const [, colPart] = key.split('>>>');
+                        return colPart === colKey ? sum + (data[v.id] || 0) : sum;
+                    }, 0);
+
+                const td = createValueCell(subtotalValue, v.id, rowBgColor, true, 'subtotals');
+                td.style.backgroundColor = rowBgColor ? `#${rowBgColor}` : fallbackBg;
+                subtotalRow.appendChild(td);
+            });
+        });
+
+        if (showRowTotals) {
+            valueCols.forEach(v => {
+                const groupPrefix = currentGroupValues.slice(0, level + 1).join('|');
+                const rowTotal = Array.from(pivotMap.entries())
+                    .filter(([key]) => key.startsWith(groupPrefix))
+                    .reduce((sum, [_, data]) => sum + (data[v.id] || 0), 0);
+
+                const td = createValueCell(rowTotal, v.id, rowBgColor, true, 'subtotals');
+                td.classList.add('subtotal');
+                td.style.backgroundColor = rowBgColor ? `#${rowBgColor}` : fallbackBg;
+                td.style.fontWeight = 'bold';
+                subtotalRow.appendChild(td);
+            });
+        }
+
+        tbody.insertBefore(subtotalRow, referenceRow ? referenceRow.nextSibling : null);
+    }
+
+    function generateAllCombinations(pivotCols, pivotValuesMap) {
+        if (pivotCols.length === 0) return [{}];
+
+        const seen = new Set();
+        const validCombinations = [];
+
+        allData.forEach(row => {
+            const combo = {};
+            pivotCols.forEach(p => combo[p.id] = row[p.id]?.toString() || '');
+            const key = JSON.stringify(combo);
+            if (!seen.has(key)) {
+                seen.add(key);
+                validCombinations.push(combo);
+            }
+        });
+
+        return validCombinations
+    }
+
+    function createHeaderStructure(pivotCols, combinations) {
+        if (!pivotCols.length) return [];
+
+        const field = pivotCols[0].id;
+        const groups = new Map();
+
+        combinations.forEach(combo => {
+            const value = combo[field];
+            if (!groups.has(value)) {
+                groups.set(value, {
+                    value: value,
+                    span: 1,
+                    children: pivotCols.length > 1 ?
+                        createHeaderStructure(
+                            pivotCols.slice(1),
+                            combinations.filter(c => c[field] === value)
+                        ) : null
+                });
+            } else {
+                groups.get(value).span++;
+            }
+        });
+
+        return Array.from(groups.values());
+    }
+
+    async function refreshWorksheetDataForExport() {
+    let dataTableReader;
+    try {
+        const worksheetName = "Download";
+        const worksheet = tableau.extensions.dashboardContent.dashboard.worksheets
+                            .find(ws => ws.name === worksheetName);
+        
+        // Get columns in Tableau view order
+        const columnsInfo = await worksheet.getSummaryColumnsInfoAsync();
+        dataTableReader = await worksheet.getSummaryDataReaderAsync();
+        const firstPage = await dataTableReader.getPageAsync(0);
+        
+        // Create column index mapping
+        const sortedColumns = firstPage.columns;
+        const indexMap = columnsInfo.map(viewCol => 
+            sortedColumns.findIndex(sortedCol => 
+                sortedCol.fieldId === viewCol.fieldId
+            )
+        );
+
+        // Rebuild data
+        columns = columnsInfo.map(col => ({ 
+            id: col.fieldName, 
+            name: col.fieldName 
+        }));
+
+        allData = [];
+        for (let page = 0; page < dataTableReader.pageCount; page++) {
+            const dataTablePage = await dataTableReader.getPageAsync(page);
+            for (let rowIndex = 0; rowIndex < dataTablePage.totalRowCount; rowIndex++) {
+                const row = dataTablePage.data[rowIndex];
+                const obj = {};
+                columnsInfo.forEach((col, colIndex) => {
+                    const sourceIndex = indexMap[colIndex];
+                    obj[col.fieldName] = row[sourceIndex]?.value ?? null;
+                });
+                allData.push(obj);
+            }
+        }
+
+        // Rebuild titleColumnMap
+        titleColumnMap = {};
+        allData.forEach(r => {
+            columns.forEach(c => {
+                if (!titleColumnMap[c.id] && r[c.id]) titleColumnMap[c.id] = r[c.id];
+            });
+        });
+
+    } catch (error) {
+        console.error('Data refresh error:', error);
+    } finally {
+        if (dataTableReader) {
+            await dataTableReader.releaseAsync();
+        }
+    }
+}
+
+    function createHeaderLevels(pivotCols, structure, levels = [], depth = 0) {
+        if (!structure || structure.length === 0) return levels;
+
+        levels[depth] = levels[depth] || [];
+        structure.forEach(group => {
+            levels[depth].push({
+                value: group.value,
+                span: group.span
+            });
+            if (group.children) {
+                createHeaderLevels(pivotCols.slice(1), group.children, levels, depth + 1);
+            }
+        });
+
+        for (let i = depth + 1; i < pivotCols.length; i++) {
+            levels[i] = levels[i] || [];
+        }
+
+        return levels;
+    }
+
+    async function exportExcel() {
+        try {
+            const config = await loadConfiguration();
+            if (!config || !config.groupColumns.length || !config.valueColumns.length) {
+                alert('No valid configuration found. Please configure the pivot table.');
+                return;
+            }
+
+            const worksheet = tableau.extensions.dashboardContent.dashboard.worksheets[0];
+            const worksheetName = worksheet.name.replace(/[^a-z0-9]/gi, '_') || 'pivot_data';
+            const table = await generatePivotTable(config);
+            const clone = table.cloneNode(true);
+            // Get filename from config
+            let fileName = config.excelFileName;
+            if (!fileName && config.excelFileNameField) {
+                fileName = titleColumnMap[config.excelFileNameField] || 'pivot_data';
+            }
+            fileName = fileName.replace(/[^a-z0-9]/gi, '_') || 'pivot_data';
+            if (!fileName.toLowerCase().endsWith('.xls')) fileName += '.xls';
+
+            // Get worksheet name from config with a default value
+            let sheetName = config.excelSheetName;
+            if (!sheetName && config.excelSheetNameField) {
+                sheetName = titleColumnMap[config.excelSheetNameField] || 'Pivot Data';
+            }
+            if (!sheetName) {
+                sheetName = 'Pivot Data'; // Ensure sheetName is never undefined
+            }
+            sheetName = sheetName.substring(0, 31).replace(/[\\/?*[\]]/g, '');
+
+            // Flatten spans for shape + value
+            clone.querySelectorAll('td span').forEach(span => {
+                const parent = span.parentElement;
+                if (parent) {
+                    parent.textContent = span.textContent;
+                }
+            });
+
+            // Apply row-based background color to all cells in data rows
+            const groupCols = config.groupColumns;
+            clone.querySelectorAll('tbody tr:not(.grand-total):not(.subtotal-row)').forEach(row => {
+                const rowValues = Array.from(row.querySelectorAll('td[data-column-id]'))
+                    .slice(0, groupCols.length)
+                    .map(td => td.getAttribute('data-value'));
+                const rowBgColor = getRowBackgroundColor(rowValues, groupCols);
+                if (rowBgColor) {
+                    row.querySelectorAll('td').forEach(td => {
+                        td.style.backgroundColor = `#${rowBgColor} !important`;
+                    });
+                }
+            });
+
+            // Apply row-based background color to subtotal rows
+            clone.querySelectorAll('tbody tr.subtotal-row').forEach(row => {
+                const rowValues = Array.from(row.querySelectorAll('td'))
+                    .slice(0, groupCols.length)
+                    .map(td => td.textContent.replace(' Subtotal', ''));
+                const level = rowValues.findIndex((val, idx) => idx === groupCols.length - 1 || val === '');
+                const rowBgColor = getRowBackgroundColor(rowValues, groupCols, level);
+                const fallbackBg = `#${headerFormatSettings.subtotals?.bgColor || 'F8F9FA'}`;
+                row.querySelectorAll('td').forEach(td => {
+                    td.style.backgroundColor = rowBgColor ? `#${rowBgColor} !important` : `${fallbackBg} !important`;
+                });
+            });
+
+            // Apply header and cell-specific styles
+            clone.querySelectorAll('th, td').forEach(cell => {
+                const existingStyle = cell.getAttribute('style') || '';
+                cell.setAttribute('style', existingStyle.replace(/text-align:\s*[^;]+;?/g, ''));
+
+                if (cell.classList.contains('table-title')) {
+                    cell.style.textAlign = titleAlignment;
+                    return;
+                }
+
+                const headerRow = cell.closest('tr');
+                if (headerRow && clone.tHead && Array.from(clone.tHead.rows).includes(headerRow)) {
+                    const rowIndex = Array.from(clone.tHead.rows).indexOf(headerRow);
+                    if (rowIndex < headerRowsCount) {
+                        const settings = headerRowSettings[rowIndex];
+                        cell.style.textAlign = settings?.textAlign || 'left';
+                        return;
+                    }
+                }
+
+                if (cell.classList.contains('group-header')) {
+                    const headerType = cell.closest('thead') ? 'rowGroups' : 'columnGroups';
+                    cell.style.textAlign = headerFormatSettings[headerType].textAlign;
+                    return;
+                }
+
+                const columnId = cell.getAttribute('data-column-id');
+                if (columnId && formatSettings[columnId]) {
+                    cell.style.textAlign = formatSettings[columnId].textAlign || 'right';
+                }
+            });
+
+            clone.querySelectorAll('.subtotal-row').forEach(row => {
+                row.querySelectorAll('td').forEach(td => {
+                    td.style.fontWeight = 'bold';
+                });
+            });
+
+            clone.querySelectorAll('tr').forEach(row => {
+                row.style.height = '30pt';
+                row.style.mssoHeightRule = 'exactly';
+            });
+
+            clone.querySelectorAll('.grand-total').forEach(cell => {
+                cell.style.fontWeight = 'bold';
+            });
+
+            clone.querySelectorAll('td').forEach(td => {
+                td.style.verticalAlign = 'middle';
+                td.style.padding = '5px 8px';
+                if (!td.style.textAlign) td.style.textAlign = 'right';
+            });
+
+            clone.querySelectorAll('th').forEach(th => {
+                th.style.verticalAlign = 'middle';
+                th.style.padding = '8px 10px';
+            });
+
+            clone.setAttribute('border', '1');
+            clone.style.borderCollapse = 'collapse';
+
+            clone.querySelectorAll('th, td').forEach(cell => {
+                const existingStyle = cell.getAttribute('style') || '';
+                cell.setAttribute('style', existingStyle +
+                    'border-left: 0.5pt solid #808080 !important; ' +
+                    'border-right: 0.5pt solid #808080 !important; ' +
+                    'border-top: 0.5pt solid #808080 !important; ' +
+                    'border-bottom: 0.5pt solid #808080 !important;');
+
+                if (cell.classList.contains('table-title')) {
+                    cell.style.verticalAlign = 'middle';
+                    cell.style.color = `#${titleFontColor} !important`;
+                    cell.style.backgroundColor = `#${titleBgColor} !important`;
+                }
+            });
+
+            clone.querySelectorAll('td[data-column-id]').forEach(cell => {
+                const columnId = cell.getAttribute('data-column-id');
+                const dataValue = cell.getAttribute('data-value');
+                const isGroupColumn = config.groupColumns.some(gc => gc.id === columnId);
+                if (isGroupColumn) {
+                    cell.setAttribute('style', 
+                        cell.getAttribute('style') + 
+                        'mso-number-format:"\\@"; ' +
+                        'text-align: left; ' +
+                        'vertical-align: middle');
+                    cell.textContent = dataValue;
+                } else {
+                    const settings = formatSettings[columnId] || {};
+                    const decimals = settings.decimals ?? 2;
+                    const formatType = settings.formatType ?? 'number';
+                    const currencySymbol = settings.currencySymbol || '$';
+
+                    const cellValue = parseFloat(dataValue) || 0;
+                    let excelFormat;
+
+                    const shapePrefix = (() => {
+                        const conditions = settings.conditions || [];
+                        for (const cond of conditions) {
+                            const condVal = cond.compareType === 'field'
+                                ? allData.find(row => row[columnId] == dataValue)?.[cond.value]
+                                : cond.value;
+
+                            switch (cond.operator) {
+                                case '>': if (parseFloat(dataValue) > parseFloat(condVal)) return cond.shape || ''; break;
+                                case '<': if (parseFloat(dataValue) < parseFloat(condVal)) return cond.shape || ''; break;
+                                case '==': if (dataValue.toString() === condVal?.toString()) return cond.shape || ''; break;
+                            }
+                        }
+                        return '';
+                    })();
+
+                    switch (formatType) {
+                        case 'currency':
+                            excelFormat = decimals > 0 
+                                ? `"${currencySymbol}"#,##0.${'0'.repeat(decimals)}` 
+                                : `"${currencySymbol}"#,##0`;
+                            break;
+                        case 'percentage':
+                            excelFormat = decimals > 0 
+                                ? `0.${'0'.repeat(decimals)}%` 
+                                : `0%`;
+                            break;
+                        case 'text':
+                            excelFormat = '@';
+                            break;
+                        default:
+                            excelFormat = decimals > 0 
+                                ? `#,##0.${'0'.repeat(decimals)}` 
+                                : `#,##0`;
+                    }
+
+                    if (shapePrefix) {
+                        excelFormat = `"${shapePrefix} "${excelFormat}`;
+                    }
+
+                    const existingStyle = cell.getAttribute('style') || '';
+                    cell.setAttribute('x:num', cellValue);
+                    cell.setAttribute('style', existingStyle + `mso-number-format:"${excelFormat.replace(/"/g, '\\"')}";`);
+
+                    if (formatType === 'percentage') {
+                        cell.textContent = (cellValue).toFixed(decimals + 2);
+                    } else {
+                        cell.textContent = cellValue.toFixed(decimals);
+                    }
+                }
+            });
+
+            const html = `
+                <html xmlns:o="urn:schemas-microsoft-com:office:office" 
+                    xmlns:x="urn:schemas-microsoft-com:office:excel"
+                    xmlns="http://www.w3.org/TR/REC-html40">
+                    <head>
+                        <meta charset="UTF-8">
+                        <!--[if gte mso 9]>
+                        <xml>
+                            <x:ExcelWorkbook>
+                                <x:ExcelWorkbookName>${fileName}</x:ExcelWorkbookName>
+                                <x:ExcelWorksheets>
+                                    <x:ExcelWorksheet>
+                                        <x:Name>${sheetName}</x:Name>
+                                        <x:WorksheetOptions>
+                                            <x:DisplayGridlines>0</x:DisplayGridlines>
+                                        </x:WorksheetOptions>
+                                        <x:Styles>
+                                            <x:Style ss:ID="s1">
+                                                <x:Alignment ss:Vertical="Top" ss:WrapText="1"/>
+                                            </x:Style>
+                                        </x:Styles>
+                                    </x:ExcelWorksheet>
+                                </x:ExcelWorksheets>
+                            </x:ExcelWorkbook>
+                        </xml>
+                        <![endif]-->
+                    </head>
+                    <body>${clone.outerHTML}</body>
+                </html>`;
+
+            const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Export error:', error);
+            alert('Export failed: ' + error.message);
+        }
+    }
+
+document.addEventListener("DOMContentLoaded", async () => {
+    try {
+        // 1. Initialize the extension & Configure dialog
+        await tableau.extensions.initializeAsync({
+            configure: () => {
+                const url = window.location.origin + '/config.html';
+                tableau.extensions.ui
+                    .displayDialogAsync(url, '', { width: 800, height: 600 })
+                    .then(refreshWorksheetDataForExport)
+                    .catch(err => console.error('Dialog error:', err));
+            }
+        });
+
+        // 2. Grab the worksheet reference once
+        const worksheetName = "Download";
+        const worksheet = tableau.extensions.dashboardContent.dashboard.worksheets
+            .find(ws => ws.name === worksheetName);
+        if (!worksheet) {
+            console.error(`Worksheet "${worksheetName}" not found`);
+            return;
+        }
+
+        // 3. Initial load & restore settings
+        await refreshWorksheetDataForExport();
+        await loadConfiguration();
+
+        // 4. Wire Export button to always refresh then export
+        document.getElementById('export-btn').addEventListener('click', async () => {
+            console.log('Export clicked — refreshing data first');
+            await refreshWorksheetDataForExport();
+            await loadConfiguration();
+            exportExcel();
+        });
+
+        // 5. Auto‑refresh on any summary‑data change
+        worksheet.addEventListener(
+            tableau.TableauEventType.SummaryDataChanged,
+            async () => {
+                console.log('Data changed in Tableau — pulling in new data');
+                await refreshWorksheetDataForExport();
+                await loadConfiguration();
+                // If you render a live preview here, re-render now
+            }
+        );
+    }
+    catch (error) {
+        console.error('Initialization error:', error);
+        alert('Initialization failed: ' + error.message);
+    }
+});
+
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'939a79538c047b93',t:'MTc0NjIxOTg5Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'939ee4cb1e85bfb5',t:'MTc0NjI2NjI0MS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'93b07090cecc1d66',t:'MTc0NjQ1MDIyNC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
