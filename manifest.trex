@@ -4,10 +4,10 @@
     <default-locale>en_US</default-locale>
     <name resource-id="name"/>
     <description>My Tableau Extension</description>
-    <author name="Your Name" email="you@example.com" organization="Your Company" website="https://yourwebsite.com"/>
+    <author name="Abhishek Rao" email="abhishek.rao@epsilon.com" organization="Epsilon" website="https://epsilon.com"/>
     <min-api-version>1.1</min-api-version>
     <source-location>
-      <url>http://localhost:8080</url>
+      <url>https://abhishekraoep.github.io/ExcelExtension/</url>
     </source-location>
     <icon></icon>
     <permissions>
