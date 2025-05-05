@@ -1037,7 +1037,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         // 1. Initialize the extension & Configure dialog
         await tableau.extensions.initializeAsync({
             configure: () => {
-                const url = window.location.origin + 'https://abhishekraoep.github.io/ExcelExtension/config.html';
+                const url = new URL('config.html', window.location.href).href;
                 tableau.extensions.ui
                     .displayDialogAsync(url, '', { width: 800, height: 600 })
                     .then(refreshWorksheetDataForExport)
